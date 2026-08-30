@@ -1,0 +1,11 @@
+output "application_url" { value = module.stack.application_url }
+output "alb_dns_name" { value = module.stack.alb_dns_name }
+output "ecr_repository_urls" { value = module.stack.ecr_repository_urls }
+output "ecs_cluster_name" { value = module.stack.ecs_cluster_name }
+output "ecs_services" { value = module.stack.ecs_services }
+output "database_endpoint" { value = module.stack.database_endpoint }
+output "database_secret_arn" { value = module.stack.database_secret_arn }
+output "vpc_id" { value = module.stack.vpc_id }
+output "nat_public_ips" { value = module.stack.nat_public_ips }
+output "waf_web_acl_arn" { value = module.stack.waf_web_acl_arn }
+output "log_groups" { value = module.stack.log_groups }

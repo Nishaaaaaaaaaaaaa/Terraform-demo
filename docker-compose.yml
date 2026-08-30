@@ -1,3 +1,27 @@
+# =============================================================================
+# Application stack, instrumented for the local SigNoz install.
+#
+#   traces/metrics/logs from `server`  -> OTLP  host.docker.internal:4318
+#   stdout/stderr from every container -> fluentd  localhost:24224 (otel-agent)
+#
+# The otel-agent (../observability) must be running for telemetry to land, but
+# nothing here hard-depends on it: the fluentd driver is async, so containers
+# still start and run normally if the agent is down.
+# =============================================================================
+
+# Anchor: ship container stdout/stderr to the otel-agent's fluentforward
+# receiver. Docker attaches container_name/container_id, which is what gives
+# properly labelled container logs in SigNoz. `fluentd-async` keeps the app
+# decoupled from the collector's availability.
+x-logging: &otel-logging
+    driver: fluentd
+    options:
+        fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "30"
+        tag: "docker.{{.Name}}"
+
 services:
     postgres:
         container_name: database
@@ -14,6 +38,8 @@ services:
             timeout: 60s
             retries: 5
             start_period: 80s
+        logging: *otel-logging
+
     server:
         container_name: server
         build:
@@ -21,20 +47,54 @@ services:
             dockerfile: Dockerfile
         ports:
             - "7999:8000"
-        command: bash -c "npx prisma migrate reset --force && npm start"
+        command: sh -c "npx prisma migrate reset --force && npm start"
         environment:
             DATABASE_URL: "${DATABASE_URL}"
             PORT: "${SERVER_PORT}"
+
+            # ---- OpenTelemetry ------------------------------------------
+            OTEL_SERVICE_NAME: crud-server-express
+            OTEL_EXPORTER_OTLP_ENDPOINT: "http://host.docker.internal:4318"
+            OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+            OTEL_RESOURCE_ATTRIBUTES: "service.namespace=demo-crud,service.version=1.0.0,deployment.environment=local"
+            OTEL_NODE_RESOURCE_DETECTORS: "env,host,os,process,container"
+            # Export promptly so dashboards are responsive in dev.
+            OTEL_BSP_SCHEDULE_DELAY: "2000"
+            OTEL_BLRP_SCHEDULE_DELAY: "2000"
+            LOG_LEVEL: info
+            # Exposes GET /debug/error for exercising error-rate panels.
+            # Remove this outside local development.
+            ENABLE_DEBUG_ROUTES: "true"
+        # Lets the container reach the SigNoz OTLP endpoint published on the host.
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        healthcheck:
+            test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+            interval: 15s
+            timeout: 5s
+            retries: 5
+            start_period: 60s
         depends_on:
             postgres:
                 condition: service_healthy
+        # NOTE: deliberately NOT using the fluentd driver here. This service
+        # ships its own logs over OTLP with severity, structured attributes and
+        # trace_id/span_id correlation, which is strictly richer than scraping
+        # its stdout. Keeping json-file also preserves `docker logs server`.
+        logging:
+            driver: json-file
+            options:
+                max-size: "10m"
+                max-file: "3"
+
     client:
         container_name: client
         build:
             context: ./client
             dockerfile: Dockerfile
-        command: bash -c "npm run preview"
+        command: sh -c "npm run preview"
         ports:
             - "4172:4173"
         depends_on:
             - server
+        logging: *otel-logging

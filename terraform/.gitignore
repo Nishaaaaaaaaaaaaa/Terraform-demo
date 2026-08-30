@@ -1,0 +1,15 @@
+# Terraform state contains secrets in plain text — never commit it.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+
+# Local overrides
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+
+# Plans can contain secret values
+*.tfplan
