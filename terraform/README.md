@@ -1,3 +1,6 @@
+🏆 Acknowledgments & Core Application
+A massive shoutout to snigdho611/docker-compose-react-nodejs-postgres. The application code managed by this pipeline was cloned directly from that excellent boilerplate. It provides the core React frontend, Node.js REST API, and PostgreSQL database orchestrated via Docker Compose.
+
 # Terraform — `docker-compose-react-nodejs-postgres` on AWS ECS
 
 Infrastructure-as-code for running the reference app on AWS Fargate behind an
